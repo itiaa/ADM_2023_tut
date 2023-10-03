@@ -3,3 +3,386 @@ title: "R Notebook"
 output: github_document
 ---
 
+```{bash, eval=FALSE}
+wget https://github.com/ANF-MetaBioDiv/course-material/archive/refs/heads/main.zip
+unzip main.zip
+```
+```{r,eval=FALSE}
+refdb_folder <- here::here("course-material-main", "data", "refdb")
+refdb_folder
+```
+
+```{r, eval=FALSE}
+if (!dir.exists(refdb_folder)) dir.create(refdb_folder, recursive =TRUE) #créer le vrai dossier rfdb folder, mettre la commande de "s'il n'existe pas alors créer le" pour ne pas le supprimer à chaque fois
+
+#ctrl alt i -> créer un nv chunk
+```
+
+```{bash, eval=FALSE}
+#mettre la direction où on veut aller avant
+cp -R course-material-main/data/raw ./data
+#copier les séqeunces d'ADN Reads dans le dossier data qui est dans la direction qu'on a mise avant
+```
+
+```{r, eval=FALSE}
+# mettre le temps de chargement à 60 sec
+getOption("timeout")
+```
+
+```{r, eval=FALSE}
+# so we change timeout to be 20 minutes
+options(timeout = 60)
+
+# we save in variable the path to the refdb
+# in the working space
+silva_train_set <- file.path(refdb_folder,
+                             "silva_nr99_v138.1_train_set.fa.gz")
+
+silva_species_assignment <- file.path(refdb_folder,
+                                      "silva_species_assignment_v138.1.fa.gz")
+```
+
+```{r, eval=FALSE}
+# then we download the files if they don't already exist
+
+if (!file.exists(silva_train_set)) {
+  download.file(
+    "https://zenodo.org/record/4587955/files/silva_nr99_v138.1_train_set.fa.gz",
+    silva_train_set,
+    quiet = TRUE
+  )
+}
+```
+
+```{r}
+
+if (!file.exists(silva_species_assignment)) {
+  download.file(
+    "https://zenodo.org/record/4587955/files/silva_species_assignment_v138.1.fa.gz",
+    silva_species_assignment,
+    quiet = TRUE
+  )
+}
+```
+
+```{r}
+path_to_fastqs <- here::here("data", "raw")
+# définir le chemin pour aller aux Fastas qui s'adaptera à chaque ordinateur
+```
+
+```{r}
+fnFs <- sort(list.files(path_to_fastqs,
+                        pattern = "_R1.fastq.gz",
+                        full.names = TRUE)) 
+# définir nvlle variable qui contient tous les fichiers des fasta
+
+# seulement sélectionner les noms de fichiers qui se finissent par ce qu'on met en pattern
+```
+
+```{r}
+fnRs <- sort(list.files(path_to_fastqs,
+                        pattern = "_R2.fastq.gz",
+                        full.names = TRUE))
+# same pour les séquences inverses
+```
+
+
+```{r}
+sample_names <- basename(fnFs) |>
+  strsplit(split = "_") |> # diviser la chaîne de carac selon le modèle mis entre ""
+  sapply(head, 1) # appliquer une fonction à chaque éléments d'une liste
+sample_names
+```
+
+```{r}
+basename(fnFs) |>
+  head()
+```
+```{r}
+basename(fnFs) |>
+  strsplit(split = "_") |> # séparer les noms des fichiers en deux vecteurs
+  head()
+```
+
+```{r}
+gsub("^.+/|_.+$", "", fnFs) |> head()
+```
+
+```{r}
+devtools::load_all(path="/home/rstudio/ADM_2023_tut/course-material-main/R")
+```
+
+#partie 3
+
+```{r}
+# create a directory for the outputs
+quality_folder <- here::here("outputs",
+                             "dada2",
+                             "quality_plots")
+
+if (!dir.exists(quality_folder)) {
+  dir.create(quality_folder, recursive = TRUE)
+}
+
+qualityprofile(fnFs,
+               fnRs,
+               file.path(quality_folder, "quality_plots.pdf"))
+```
+#partie 4
+```{r}
+path_to_trimmed_reads <- here::here(
+  "outputs",
+  "dada2",
+  "trimmed"
+)
+
+if (!dir.exists(path_to_trimmed_reads)) dir.create(path_to_trimmed_reads, recursive = TRUE)
+```
+
+```{r}
+primer_fwd  <- "CCTACGGGNBGCASCAG"
+primer_rev  <- "GACTACNVGGGTATCTAAT"
+```
+
+```{r}
+Biostrings::readDNAStringSet(
+  fnFs[1],
+  format = "fastq",
+  nrec = 10
+)
+```
+
+```{r}
+Biostrings::readDNAStringSet(
+  fnRs[1],
+  format = "fastq",
+  nrec = 10
+)
+```
+
+```{bash}
+pwd
+cp -R /home/rstudio/ADM_2023_tut/course-material-main/bash .
+```
+```{r}
+(primer_log <- primer_trim(
+  forward_files = fnFs,
+  reverse_files = fnRs,
+  primer_fwd = primer_fwd,
+  primer_rev = primer_rev,
+  output_dir = path_to_trimmed_reads,
+  min_size = 200
+))
+```
+
+```{r}
+nopFw <- sort(list.files(path_to_trimmed_reads, pattern = "R1", full.names = TRUE))
+nopRv <- sort(list.files(path_to_trimmed_reads, pattern = "R2", full.names = TRUE))
+print(nopRv)
+print(nopFw)
+```
+
+#partie 5
+
+```{r}
+path_to_filtered_reads <- here::here("outputs", "dada2", "filtered")
+if (!dir.exists(path_to_filtered_reads)) dir.create(path_to_filtered_reads, recursive = TRUE)
+```
+
+```{r}
+filtFs <- file.path(path_to_filtered_reads, basename(fnFs))
+filtRs <- file.path(path_to_filtered_reads, basename(fnRs))
+```
+
+```{r}
+names(filtFs) <- sample_names
+names(filtRs) <- sample_names
+```
+
+```{r}
+(out <- dada2::filterAndTrim(
+  fwd = nopFw,
+  filt = filtFs,
+  rev = nopRv,
+  filt.rev = filtRs,
+  minLen = 150,
+  matchIDs = TRUE,
+  maxN = 0,
+  maxEE = c(3, 3),
+  truncQ = 2
+))
+```
+
+```{r}
+nopFw <- sort(list.files(path_to_trimmed_reads, pattern = "R1", full.names = TRUE))
+nopRv <- sort(list.files(path_to_trimmed_reads, pattern = "R2", full.names = TRUE))
+```
+
+#partie 6
+
+```{r}
+errF <- dada2::learnErrors(filtFs,
+                           randomize = TRUE,
+                           multithread = TRUE)
+```
+
+```{r}
+errR <- dada2::learnErrors(filtRs,
+                           randomize = TRUE,
+                           multithread = TRUE)
+```
+
+```{r}
+dada2::plotErrors(errF, nominalQ=TRUE)
+```
+
+```{r}
+derepFs <- dada2::derepFastq(filtFs, verbose = TRUE)
+
+derepRs <- dada2::derepFastq(filtRs, verbose = TRUE)
+```
+
+```{r}
+dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
+```
+
+```{r}
+dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
+```
+
+#partie 7
+
+```{r}
+mergers <- dada2::mergePairs(
+  dadaF = dadaFs,
+  derepF = derepFs,
+  dadaR = dadaRs,
+  derepR = derepRs,
+  maxMismatch = 0,
+  verbose = TRUE
+)
+```
+
+#partie 8
+
+```{r}
+seqtab <- dada2::makeSequenceTable(mergers)
+```
+
+#partie 9
+
+```{r}
+seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
+                                           method = "consensus",
+                                           multithread = TRUE,
+                                           verbose = TRUE)
+```
+
+#partie 10
+
+```{r}
+taxonomy <- dada2::assignTaxonomy(
+  seqs = seqtab_nochim,
+  refFasta = silva_train_set,
+  taxLevels = c("Kingdom", "Phylum", "Class",
+                "Order", "Family", "Genus",
+                "Species"),
+  multithread = TRUE,
+  minBoot = 60
+)
+```
+
+```{r}
+taxonomy <- dada2::addSpecies(
+  taxonomy,
+  silva_species_assignment,
+  allowMultiple = FALSE
+)
+```
+
+#partie 11
+
+```{r}
+export_folder <- here::here("outputs", "dada2", "asv_table")
+
+if (!dir.exists(export_folder)) dir.create(export_folder, recursive = TRUE)
+
+saveRDS(object = seqtab_nochim,
+        file = file.path(export_folder, "seqtab_nochim.rds"))
+
+saveRDS(object = taxonomy,
+        file = file.path(export_folder, "taxonomy.rds"))
+```
+
+
+```{r}
+asv_seq <- colnames(seqtab_nochim)
+```
+
+```{r}
+ndigits <- nchar(length(asv_seq))
+asv_id <- sprintf(paste0("ASV_%0", ndigits, "d"), seq_along(asv_seq))
+```
+
+
+```{r}
+row.names(taxonomy) <- colnames(seqtab_nochim) <- names(asv_seq) <- asv_id
+```
+
+```{r}
+taxonomy_export <- df_export(taxonomy, new_rn = "asv")
+
+seqtab_nochim_export <- t(seqtab_nochim)
+seqtab_nochim_export <- df_export(seqtab_nochim_export, new_rn = "asv")
+```
+
+```{r}
+write.table(taxonomy_export,
+            file = file.path(export_folder, "taxonomy.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+```{r}
+write.table(seqtab_nochim_export,
+            file = file.path(export_folder, "asv_table.tsv"),
+            quote = FALSE,
+            sep = "\t",
+            row.names = FALSE)
+```
+
+```{r}
+cat(paste0(">", names(asv_seq), "\n", asv_seq),
+    sep = "\n",
+    file = file.path(export_folder, "asv.fasta"))
+```
+
+```{r}
+getN <- function(x) sum(dada2::getUniques(x))
+
+log_table <- data.frame(
+  input = primer_log$in_reads,
+  with_fwd_primer = primer_log$`w/adapters`,
+  with_rev_primer = primer_log$`w/adapters2` ,
+  with_both_primers = out[, 1],
+  filtered = out[, 2],
+  denoisedF = sapply(dadaFs, getN),
+  denoisedR = sapply(dadaRs, getN),
+  merged = sapply(mergers, getN),
+  nonchim = rowSums(seqtab_nochim),
+  perc_retained = rowSums(seqtab_nochim) / out[, 1] * 100
+)
+
+rownames(log_table) <- sample_names
+```
+
+```{r}
+df_export(log_table, new_rn = "sample") |>
+  write.table(file = file.path(export_folder, "log_table.tsv"),
+              quote = FALSE,
+              sep = "\t",
+              row.names = FALSE)
+```
+
+
