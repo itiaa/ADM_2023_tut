@@ -2,8 +2,4 @@
 title: "R Notebook"
 output: github_document
 ---
-```{bash}
-git config --global user.email "annabruhat@yahoo.fr"
-git config --global user.name "itiaa"
-```
 
