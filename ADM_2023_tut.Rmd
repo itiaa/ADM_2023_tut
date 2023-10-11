@@ -118,7 +118,7 @@ devtools::load_all(path="/home/rstudio/ADM_2023_tut/course-material-main/R")
 #partie 3
 
 ```{r}
-# on créé une direction pour les sorties
+# on crée une direction pour les sorties
 quality_folder <- here::here("outputs",
                              "dada2",
                              "quality_plots")
@@ -133,7 +133,7 @@ qualityprofile(fnFs,
 ```
 #partie 4
 ```{r}
-#on créé un dossier où sauvegarder les Reads après qu'elles aient été élaguées
+#on crée un dossier où sauvegarder les Reads après qu'elles aient été élaguées
 path_to_trimmed_reads <- here::here(
   "outputs",
   "dada2",
@@ -144,7 +144,7 @@ if (!dir.exists(path_to_trimmed_reads)) dir.create(path_to_trimmed_reads, recurs
 ```
 
 ```{r}
-#on créé les primers
+#on crée les primers
 primer_fwd  <- "CCTACGGGNBGCASCAG"
 primer_rev  <- "GACTACNVGGGTATCTAAT"
 ```
@@ -222,14 +222,15 @@ names(filtRs) <- sample_names
   filt.rev = filtRs, #la même chose mais pour les reverse
   minLen = 150,
   matchIDs = TRUE,
-  maxN = 0,
-  maxEE = c(3, 3),
+  maxN = 0, #la valeur max acceptée de base pas sûres
+  maxEE = c(3, 3), #read expected errors (EE) seuil, c'est la somme des probabilités d'erreur de chaque base qui compose le read. augmenter cette valeur permet d'accepter plus de reads de basse qualité. La première valeur c'est les forward reads, et la deuxième c'est les reverse
   truncQ = 2 #tronquer les reads à la première vue d'un score de qualité <= à truncQ
 ))
 ```
 #partie 6
 
 ```{r}
+#pour enlever le bruit de fond de notre data, on doit utiliser une erreur modèle, on peut l'apprendre directement par la fonction qui suit 
 errF <- dada2::learnErrors(filtFs,
                            randomize = TRUE,
                            multithread = TRUE)
@@ -242,26 +243,31 @@ errR <- dada2::learnErrors(filtRs,
 ```
 
 ```{r}
+#le résultat du modèle d'erreur
 dada2::plotErrors(errF, nominalQ=TRUE)
 ```
 
 ```{r}
+#avant d'enlever le bruit de fond, on doit dupliquer les séquences, pour chaque séquence il faut compter le nbr de reads
 derepFs <- dada2::derepFastq(filtFs, verbose = TRUE)
 
 derepRs <- dada2::derepFastq(filtRs, verbose = TRUE)
 ```
 
 ```{r}
+# et là on run la fonction pour enlever le bruit de fond
 dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
 ```
 
 ```{r}
+#same pour les reverses
 dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
 ```
 
 #partie 7
 
 ```{r}
+#on peut les fusionner
 mergers <- dada2::mergePairs(
   dadaF = dadaFs,
   derepF = derepFs,
@@ -275,12 +281,15 @@ mergers <- dada2::mergePairs(
 #partie 8
 
 ```{r}
+# à ce stade on a les ASV et on sait le nombre de reads de chaque échantillon, donc on peut faire une ASV table (table de comptage)
 seqtab <- dada2::makeSequenceTable(mergers)
 ```
 
 #partie 9
 
 ```{r}
+#les chimères sont les séquences artefacts formées par 2 ou + séquences biologiques qui sont mal jointes
+# on trouve et supprime les bimères (deux chimères parents) :
 seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
                                            method = "consensus",
                                            multithread = TRUE,
@@ -290,6 +299,10 @@ seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
 #partie 10
 
 ```{r}
+#la table ASV est prête, mais sans avoir aucune info sur l'identité taxonomique, donc on n'irait pas très loin dans notre interprétation écologique
+# on peut avoir une idée de l'identité taxonomique ASV en coparant leur séquence à une database de référence comme SILVA, on le fait en deux étapes
+# 1 : chaque ASV est assignée à une taxonomie en utilisant le RDP Naive Bayesian Classifier algorithme décrit dans un papier appelé par la fonction d'après 
+
 taxonomy <- dada2::assignTaxonomy(
   seqs = seqtab_nochim,
   refFasta = silva_train_set,
@@ -302,6 +315,9 @@ taxonomy <- dada2::assignTaxonomy(
 ```
 
 ```{r}
+#la méthode est robuste mais ça loupe pour assigner à l'espèce
+#si on considère qu'une ASV est 100% similaireà une séq de ref, ça appartient à la même sp, donc on peut utiliser cette fonction :
+
 taxonomy <- dada2::addSpecies(
   taxonomy,
   silva_species_assignment,
@@ -312,6 +328,8 @@ taxonomy <- dada2::addSpecies(
 #partie 11
 
 ```{r}
+#et là on exporte tout, comme des objets R, un pour l'ASV et l'autre pour la taxonomy
+
 export_folder <- here::here("outputs", "dada2", "asv_table")
 
 if (!dir.exists(export_folder)) dir.create(export_folder, recursive = TRUE)
@@ -325,20 +343,25 @@ saveRDS(object = taxonomy,
 
 
 ```{r}
+# exporter as text, pour qu'il soit réutilisanle dans d'autres programmes ou language de programmations, mais avant faut formater la data un peu
+#d'abord on crée une nouvelle variable pour collecter les séquences ASV
 asv_seq <- colnames(seqtab_nochim)
 ```
 
 ```{r}
+#on crée des identités uniques pour chaque ASV, la séquence elle-même est une id unique, mais on veut un truc plus court
 ndigits <- nchar(length(asv_seq))
 asv_id <- sprintf(paste0("ASV_%0", ndigits, "d"), seq_along(asv_seq))
 ```
 
 
 ```{r}
+# on renomme tout avec les nouvelles variables
 row.names(taxonomy) <- colnames(seqtab_nochim) <- names(asv_seq) <- asv_id
 ```
 
 ```{r}
+#on converti les row names (les ASV id) dans une nouvelle colonne nommée asv
 taxonomy_export <- df_export(taxonomy, new_rn = "asv")
 
 seqtab_nochim_export <- t(seqtab_nochim)
@@ -346,6 +369,7 @@ seqtab_nochim_export <- df_export(seqtab_nochim_export, new_rn = "asv")
 ```
 
 ```{r}
+#on exporte la taxonomie
 write.table(taxonomy_export,
             file = file.path(export_folder, "taxonomy.tsv"),
             quote = FALSE,
@@ -354,6 +378,7 @@ write.table(taxonomy_export,
 ```
 
 ```{r}
+#on exporte la table ASV
 write.table(seqtab_nochim_export,
             file = file.path(export_folder, "asv_table.tsv"),
             quote = FALSE,
@@ -362,12 +387,14 @@ write.table(seqtab_nochim_export,
 ```
 
 ```{r}
+#et les séquences comme étant des fichier fasta
 cat(paste0(">", names(asv_seq), "\n", asv_seq),
     sep = "\n",
     file = file.path(export_folder, "asv.fasta"))
 ```
 
 ```{r}
+#on assemble le tableau
 getN <- function(x) sum(dada2::getUniques(x))
 
 log_table <- data.frame(
@@ -387,6 +414,7 @@ rownames(log_table) <- sample_names
 ```
 
 ```{r}
+#et on l'exporte
 df_export(log_table, new_rn = "sample") |>
   write.table(file = file.path(export_folder, "log_table.tsv"),
               quote = FALSE,

@@ -1,9 +1,12 @@
 R Notebook
 ================
 
+\#partie 1
+
 ``` bash
 wget https://github.com/ANF-MetaBioDiv/course-material/archive/refs/heads/main.zip
 unzip main.zip
+# télécharger le repertoire des cours qui contient les data a utiliser 
 ```
 
 ``` r
@@ -12,6 +15,10 @@ refdb_folder
 ```
 
     ## [1] "/home/rstudio/ADM_2023_tut/course-material-main/data/refdb"
+
+``` r
+#sauvegarder la variable comme le chemin où on met nos data de ref
+```
 
 ``` r
 if (!dir.exists(refdb_folder)) dir.create(refdb_folder, recursive =TRUE) #créer le vrai dossier rfdb folder, mettre la commande de "s'il n'existe pas alors créer le" pour ne pas le supprimer à chaque fois
@@ -33,11 +40,10 @@ getOption("timeout")
     ## [1] 60
 
 ``` r
-# so we change timeout to be 20 minutes
+# on change le temps de chargement à 60sec
 options(timeout = 60)
 
-# we save in variable the path to the refdb
-# in the working space
+# télécharger les bases de données dada2 formatées depuis Silva
 silva_train_set <- file.path(refdb_folder,
                              "silva_nr99_v138.1_train_set.fa.gz")
 
@@ -64,6 +70,8 @@ if (!file.exists(silva_species_assignment)) {
   )
 }
 ```
+
+\#partie 2
 
 ``` r
 path_to_fastqs <- here::here("data", "raw")
@@ -98,7 +106,7 @@ sample_names
 
 ``` r
 basename(fnFs) |>
-  head()
+  head() #lister les fichiers qui ont R1
 ```
 
     ## [1] "S11B_R1.fastq.gz" "S1B_R1.fastq.gz"  "S2B_R1.fastq.gz"  "S2S_R1.fastq.gz" 
@@ -140,10 +148,15 @@ devtools::load_all(path="/home/rstudio/ADM_2023_tut/course-material-main/R")
 
     ## ℹ Loading ANF_metaB
 
+``` r
+# pas à l'endroit voulu car sinon ne fonctionne pas
+# utiliser devtools à la place de source(), sert à télécharger les fonctions spé pour ce tutoriel
+```
+
 \#partie 3
 
 ``` r
-# create a directory for the outputs
+# on crée une direction pour les sorties
 quality_folder <- here::here("outputs",
                              "dada2",
                              "quality_plots")
@@ -163,6 +176,7 @@ qualityprofile(fnFs,
 \#partie 4
 
 ``` r
+#on crée un dossier où sauvegarder les Reads après qu'elles aient été élaguées
 path_to_trimmed_reads <- here::here(
   "outputs",
   "dada2",
@@ -173,11 +187,13 @@ if (!dir.exists(path_to_trimmed_reads)) dir.create(path_to_trimmed_reads, recurs
 ```
 
 ``` r
+#on crée les primers
 primer_fwd  <- "CCTACGGGNBGCASCAG"
 primer_rev  <- "GACTACNVGGGTATCTAAT"
 ```
 
 ``` r
+#trouver les amorces F dans les reads 1
 Biostrings::readDNAStringSet(
   fnFs[1],
   format = "fastq",
@@ -199,6 +215,7 @@ Biostrings::readDNAStringSet(
     ## [10]   293 CCTACGGGAGGCAGCAGTGGGGA...CCCGGGCTCAACCTGGGAACGG M01522:260:000000...
 
 ``` r
+#trouver les amorces R dans les reads 2
 Biostrings::readDNAStringSet(
   fnRs[1],
   format = "fastq",
@@ -220,13 +237,14 @@ Biostrings::readDNAStringSet(
     ## [10]   301 GACTACGGGGGTATCTAATCCTG...GGCTGCCGGCACGGGGTTAGCC M01522:260:000000...
 
 ``` bash
-pwd
+pwd #copier le bash dans mon dossier de travail (dada2)
 cp -R /home/rstudio/ADM_2023_tut/course-material-main/bash .
 ```
 
     ## /home/rstudio/ADM_2023_tut
 
 ``` r
+#on enlève les séquences des amorces F et R dans les reads 1 et 2
 (primer_log <- primer_trim(
   forward_files = fnFs,
   reverse_files = fnRs,
@@ -327,36 +345,34 @@ print(nopFw)
 \#partie 5
 
 ``` r
-nopFw <- sort(list.files(path_to_trimmed_reads, pattern = "R1", full.names = TRUE))
-nopRv <- sort(list.files(path_to_trimmed_reads, pattern = "R2", full.names = TRUE))
-```
-
-``` r
+#créer un fichier
 path_to_filtered_reads <- here::here("outputs", "dada2", "filtered")
 if (!dir.exists(path_to_filtered_reads)) dir.create(path_to_filtered_reads, recursive = TRUE)
 ```
 
 ``` r
+#lister les chemins
 filtFs <- file.path(path_to_filtered_reads, basename(fnFs))
 filtRs <- file.path(path_to_filtered_reads, basename(fnRs))
 ```
 
 ``` r
+#faire les liens entre les fichiers et les noms des échantillons
 names(filtFs) <- sample_names
 names(filtRs) <- sample_names
 ```
 
 ``` r
 (out <- dada2::filterAndTrim(
-  fwd = nopFw,
-  filt = filtFs,
+  fwd = nopFw, #entrée où sont les reads forward sans les primers
+  filt = filtFs, # sorties où sont les reads forward filtrée
   rev = nopRv,
-  filt.rev = filtRs,
+  filt.rev = filtRs, #la même chose mais pour les reverse
   minLen = 150,
   matchIDs = TRUE,
-  maxN = 0,
-  maxEE = c(3, 3),
-  truncQ = 2
+  maxN = 0, #la valeur max acceptée de base pas sûres
+  maxEE = c(3, 3), #read expected errors (EE) seuil, c'est la somme des probabilités d'erreur de chaque base qui compose le read. augmenter cette valeur permet d'accepter plus de reads de basse qualité. La première valeur c'est les forward reads, et la deuxième c'est les reverse
+  truncQ = 2 #tronquer les reads à la première vue d'un score de qualité <= à truncQ
 ))
 ```
 
@@ -383,6 +399,7 @@ names(filtRs) <- sample_names
 \#partie 6
 
 ``` r
+#pour enlever le bruit de fond de notre data, on doit utiliser une erreur modèle, on peut l'apprendre directement par la fonction qui suit 
 errF <- dada2::learnErrors(filtFs,
                            randomize = TRUE,
                            multithread = TRUE)
@@ -399,15 +416,17 @@ errR <- dada2::learnErrors(filtRs,
     ## 6337638 total bases in 22350 reads from 18 samples will be used for learning the error rates.
 
 ``` r
+#le résultat du modèle d'erreur
 dada2::plotErrors(errF, nominalQ=TRUE)
 ```
 
     ## Warning: Transformation introduced infinite values in continuous y-axis
     ## Transformation introduced infinite values in continuous y-axis
 
-![](ADM_2023_tut_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
+![](ADM_2023_tut_files/figure-gfm/unnamed-chunk-30-1.png)<!-- -->
 
 ``` r
+#avant d'enlever le bruit de fond, on doit dupliquer les séquences, pour chaque séquence il faut compter le nbr de reads
 derepFs <- dada2::derepFastq(filtFs, verbose = TRUE)
 ```
 
@@ -560,6 +579,7 @@ derepRs <- dada2::derepFastq(filtRs, verbose = TRUE)
     ## Encountered 911 unique sequences from 1249 total sequences read.
 
 ``` r
+# et là on run la fonction pour enlever le bruit de fond
 dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
 ```
 
@@ -583,6 +603,7 @@ dadaFs <- dada2::dada(derepFs, err = errF, multithread = TRUE)
     ## Sample 18 - 1249 reads in 677 unique sequences.
 
 ``` r
+#same pour les reverses
 dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
 ```
 
@@ -608,6 +629,7 @@ dadaRs <- dada2::dada(derepRs, err = errR, multithread = TRUE)
 \#partie 7
 
 ``` r
+#on peut les fusionner
 mergers <- dada2::mergePairs(
   dadaF = dadaFs,
   derepF = derepFs,
@@ -657,12 +679,15 @@ mergers <- dada2::mergePairs(
 \#partie 8
 
 ``` r
+# à ce stade on a les ASV et on sait le nombre de reads de chaque échantillon, donc on peut faire une ASV table (table de comptage)
 seqtab <- dada2::makeSequenceTable(mergers)
 ```
 
 \#partie 9
 
 ``` r
+#les chimères sont les séquences artefacts formées par 2 ou + séquences biologiques qui sont mal jointes
+# on trouve et supprime les bimères (deux chimères parents) :
 seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
                                            method = "consensus",
                                            multithread = TRUE,
@@ -674,6 +699,10 @@ seqtab_nochim <- dada2::removeBimeraDenovo(seqtab,
 \#partie 10
 
 ``` r
+#la table ASV est prête, mais sans avoir aucune info sur l'identité taxonomique, donc on n'irait pas très loin dans notre interprétation écologique
+# on peut avoir une idée de l'identité taxonomique ASV en coparant leur séquence à une database de référence comme SILVA, on le fait en deux étapes
+# 1 : chaque ASV est assignée à une taxonomie en utilisant le RDP Naive Bayesian Classifier algorithme décrit dans un papier appelé par la fonction d'après 
+
 taxonomy <- dada2::assignTaxonomy(
   seqs = seqtab_nochim,
   refFasta = silva_train_set,
@@ -686,6 +715,9 @@ taxonomy <- dada2::assignTaxonomy(
 ```
 
 ``` r
+#la méthode est robuste mais ça loupe pour assigner à l'espèce
+#si on considère qu'une ASV est 100% similaireà une séq de ref, ça appartient à la même sp, donc on peut utiliser cette fonction :
+
 taxonomy <- dada2::addSpecies(
   taxonomy,
   silva_species_assignment,
@@ -696,6 +728,8 @@ taxonomy <- dada2::addSpecies(
 \#partie 11
 
 ``` r
+#et là on exporte tout, comme des objets R, un pour l'ASV et l'autre pour la taxonomy
+
 export_folder <- here::here("outputs", "dada2", "asv_table")
 
 if (!dir.exists(export_folder)) dir.create(export_folder, recursive = TRUE)
@@ -708,19 +742,24 @@ saveRDS(object = taxonomy,
 ```
 
 ``` r
+# exporter as text, pour qu'il soit réutilisanle dans d'autres programmes ou language de programmations, mais avant faut formater la data un peu
+#d'abord on crée une nouvelle variable pour collecter les séquences ASV
 asv_seq <- colnames(seqtab_nochim)
 ```
 
 ``` r
+#on crée des identités uniques pour chaque ASV, la séquence elle-même est une id unique, mais on veut un truc plus court
 ndigits <- nchar(length(asv_seq))
 asv_id <- sprintf(paste0("ASV_%0", ndigits, "d"), seq_along(asv_seq))
 ```
 
 ``` r
+# on renomme tout avec les nouvelles variables
 row.names(taxonomy) <- colnames(seqtab_nochim) <- names(asv_seq) <- asv_id
 ```
 
 ``` r
+#on converti les row names (les ASV id) dans une nouvelle colonne nommée asv
 taxonomy_export <- df_export(taxonomy, new_rn = "asv")
 
 seqtab_nochim_export <- t(seqtab_nochim)
@@ -728,6 +767,7 @@ seqtab_nochim_export <- df_export(seqtab_nochim_export, new_rn = "asv")
 ```
 
 ``` r
+#on exporte la taxonomie
 write.table(taxonomy_export,
             file = file.path(export_folder, "taxonomy.tsv"),
             quote = FALSE,
@@ -736,6 +776,7 @@ write.table(taxonomy_export,
 ```
 
 ``` r
+#on exporte la table ASV
 write.table(seqtab_nochim_export,
             file = file.path(export_folder, "asv_table.tsv"),
             quote = FALSE,
@@ -744,12 +785,14 @@ write.table(seqtab_nochim_export,
 ```
 
 ``` r
+#et les séquences comme étant des fichier fasta
 cat(paste0(">", names(asv_seq), "\n", asv_seq),
     sep = "\n",
     file = file.path(export_folder, "asv.fasta"))
 ```
 
 ``` r
+#on assemble le tableau
 getN <- function(x) sum(dada2::getUniques(x))
 
 log_table <- data.frame(
@@ -769,6 +812,7 @@ rownames(log_table) <- sample_names
 ```
 
 ``` r
+#et on l'exporte
 df_export(log_table, new_rn = "sample") |>
   write.table(file = file.path(export_folder, "log_table.tsv"),
               quote = FALSE,
