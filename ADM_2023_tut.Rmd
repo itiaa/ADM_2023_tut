@@ -3,13 +3,17 @@ title: "R Notebook"
 output: github_document
 ---
 
+#partie 1
 ```{bash, eval=FALSE}
 wget https://github.com/ANF-MetaBioDiv/course-material/archive/refs/heads/main.zip
 unzip main.zip
+# télécharger le repertoire des cours qui contient les data a utiliser 
 ```
-```{r,eval=FALSE}
+
+```{r}
 refdb_folder <- here::here("course-material-main", "data", "refdb")
 refdb_folder
+#sauvegarder la variable comme le chemin où on met nos data de ref
 ```
 
 ```{r, eval=FALSE}
@@ -24,17 +28,16 @@ cp -R course-material-main/data/raw ./data
 #copier les séqeunces d'ADN Reads dans le dossier data qui est dans la direction qu'on a mise avant
 ```
 
-```{r, eval=FALSE}
+```{r}
 # mettre le temps de chargement à 60 sec
 getOption("timeout")
 ```
 
-```{r, eval=FALSE}
-# so we change timeout to be 20 minutes
+```{r}
+# on change le temps de chargement à 60sec
 options(timeout = 60)
 
-# we save in variable the path to the refdb
-# in the working space
+# télécharger les bases de données dada2 formatées depuis Silva
 silva_train_set <- file.path(refdb_folder,
                              "silva_nr99_v138.1_train_set.fa.gz")
 
@@ -42,7 +45,7 @@ silva_species_assignment <- file.path(refdb_folder,
                                       "silva_species_assignment_v138.1.fa.gz")
 ```
 
-```{r, eval=FALSE}
+```{r}
 # then we download the files if they don't already exist
 
 if (!file.exists(silva_train_set)) {
@@ -52,9 +55,6 @@ if (!file.exists(silva_train_set)) {
     quiet = TRUE
   )
 }
-```
-
-```{r}
 
 if (!file.exists(silva_species_assignment)) {
   download.file(
@@ -65,6 +65,7 @@ if (!file.exists(silva_species_assignment)) {
 }
 ```
 
+#partie 2
 ```{r}
 path_to_fastqs <- here::here("data", "raw")
 # définir le chemin pour aller aux Fastas qui s'adaptera à chaque ordinateur
@@ -96,7 +97,7 @@ sample_names
 
 ```{r}
 basename(fnFs) |>
-  head()
+  head() #lister les fichiers qui ont R1
 ```
 ```{r}
 basename(fnFs) |>
@@ -110,12 +111,14 @@ gsub("^.+/|_.+$", "", fnFs) |> head()
 
 ```{r}
 devtools::load_all(path="/home/rstudio/ADM_2023_tut/course-material-main/R")
+# pas à l'endroit voulu car sinon ne fonctionne pas
+# utiliser devtools à la place de source(), sert à télécharger les fonctions spé pour ce tutoriel
 ```
 
 #partie 3
 
 ```{r}
-# create a directory for the outputs
+# on créé une direction pour les sorties
 quality_folder <- here::here("outputs",
                              "dada2",
                              "quality_plots")
@@ -130,6 +133,7 @@ qualityprofile(fnFs,
 ```
 #partie 4
 ```{r}
+#on créé un dossier où sauvegarder les Reads après qu'elles aient été élaguées
 path_to_trimmed_reads <- here::here(
   "outputs",
   "dada2",
@@ -140,11 +144,13 @@ if (!dir.exists(path_to_trimmed_reads)) dir.create(path_to_trimmed_reads, recurs
 ```
 
 ```{r}
+#on créé les primers
 primer_fwd  <- "CCTACGGGNBGCASCAG"
 primer_rev  <- "GACTACNVGGGTATCTAAT"
 ```
 
 ```{r}
+#trouver les amorces F dans les reads 1
 Biostrings::readDNAStringSet(
   fnFs[1],
   format = "fastq",
@@ -153,6 +159,7 @@ Biostrings::readDNAStringSet(
 ```
 
 ```{r}
+#trouver les amorces R dans les reads 2
 Biostrings::readDNAStringSet(
   fnRs[1],
   format = "fastq",
@@ -161,10 +168,12 @@ Biostrings::readDNAStringSet(
 ```
 
 ```{bash}
-pwd
+pwd #copier le bash dans mon dossier de travail (dada2)
 cp -R /home/rstudio/ADM_2023_tut/course-material-main/bash .
 ```
+
 ```{r}
+#on enlève les séquences des amorces F et R dans les reads 1 et 2
 (primer_log <- primer_trim(
   forward_files = fnFs,
   reverse_files = fnRs,
@@ -185,39 +194,39 @@ print(nopFw)
 #partie 5
 
 ```{r}
+#créer un fichier
 path_to_filtered_reads <- here::here("outputs", "dada2", "filtered")
 if (!dir.exists(path_to_filtered_reads)) dir.create(path_to_filtered_reads, recursive = TRUE)
 ```
 
+
 ```{r}
+#lister les chemins
 filtFs <- file.path(path_to_filtered_reads, basename(fnFs))
 filtRs <- file.path(path_to_filtered_reads, basename(fnRs))
 ```
 
+
 ```{r}
+#faire les liens entre les fichiers et les noms des échantillons
 names(filtFs) <- sample_names
 names(filtRs) <- sample_names
 ```
 
 ```{r}
+
 (out <- dada2::filterAndTrim(
-  fwd = nopFw,
-  filt = filtFs,
+  fwd = nopFw, #entrée où sont les reads forward sans les primers
+  filt = filtFs, # sorties où sont les reads forward filtrée
   rev = nopRv,
-  filt.rev = filtRs,
+  filt.rev = filtRs, #la même chose mais pour les reverse
   minLen = 150,
   matchIDs = TRUE,
   maxN = 0,
   maxEE = c(3, 3),
-  truncQ = 2
+  truncQ = 2 #tronquer les reads à la première vue d'un score de qualité <= à truncQ
 ))
 ```
-
-```{r}
-nopFw <- sort(list.files(path_to_trimmed_reads, pattern = "R1", full.names = TRUE))
-nopRv <- sort(list.files(path_to_trimmed_reads, pattern = "R2", full.names = TRUE))
-```
-
 #partie 6
 
 ```{r}
@@ -297,7 +306,7 @@ taxonomy <- dada2::addSpecies(
   taxonomy,
   silva_species_assignment,
   allowMultiple = FALSE
-)
+)   
 ```
 
 #partie 11
@@ -384,5 +393,3 @@ df_export(log_table, new_rn = "sample") |>
               sep = "\t",
               row.names = FALSE)
 ```
-
-
