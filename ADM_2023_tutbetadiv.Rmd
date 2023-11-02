@@ -7,15 +7,11 @@ output: github_document
 library(phyloseq)
 library(ggplot2)
 library(dplyr)
-devtools::load_all()
+devtools::load_all(path="course-material-main")
 ```
 ```{r}
 output_beta <- here::here("outputs", "beta_diversity")
 if (!dir.exists(output_beta)) dir.create(output_beta, recursive = TRUE)
-```
-
-```{r}
-
 ```
 
 
@@ -388,7 +384,7 @@ text(x = spe_upgma$height,
 
 install.packages("NbClust", lib = ".")
 library("NbClust", lib.loc = ".")
-nclust <- nb_clust_all(data = t(physeq_clr_asv), seed = 1000) #ne fonctionne pas
+nclust <- nb_clust_all(data = t(physeq_clr_asv), seed = 1000) 
 ```
 
 ```{r}
@@ -484,8 +480,6 @@ head(data.frame(heat))
 ```
 
 ```{r}
-#fonctionne pas à cause de unit
-
 ComplexHeatmap::Heatmap(
   heat,
   row_names_gp = grid::gpar(fontsize = 6),
@@ -571,7 +565,27 @@ ComplexHeatmap::Heatmap(
 ```{r}
 #pendant que l'analyse des cluster cherche pour une discontinuité dans le dataset, l'ordination extrait la plus obvious tendance en forme d'axes continus.
 #c'est bien adapté d'analyser les data depuis des communautés écologiques naturelles qui sont généralement structurées en gradient
-#c'est pourquoi
+#c'est pourquoi ces types d'analyses sont appelées des analyses gradientes. Le but de la méthode d'ordination c'est de représenter la data le long d'un nombre réduit d'axe orthogonaux, construits dans un sens où ils représentent dans un ordre décroissant la tendance la plus représent&e des data. On va voir 4 types d'analyses vue en écologie : PCA, PCoA, NMDS : toutes ces méthodes sont descriptives : aucun test stat est  fourni pour évaluer la signification des structures détectées. C'est le rôle des ordinations sous contraintes ou des analyses de test d'hypothèses qui sont présentées par la suite.
+
+```
+
+#partie 6.1 : PCA
+```{r}
+#PCA : principal component analysis : méthode pour résumé, dans un espace avec peu de dimension, la variance dans une dispersion mutivariée de points. Ca donne une vue sur les relations linéaires entre nos objets et nos variables. Ca peut souvent servir de bon point de départ dans l'analyse de data multivariées en nous permettant de faire une tendance, des groupes, des variables clées et des potentiels valeurs aberrantes. Ici on va utiliser la distance d'Aitchinson. Attention : c'est le tableau ASV CLR transformé  qu'on utilise directement, pas la matrice de distance Aitchinson. Cette fonction va calculer une distance euclidienne sur le tableau CLR transformé pour avoir la matrice Aitchinson. Il y a beaucoup de packages qui permettent l'analyse PCA. On va utilisé le PCAtools qui est récent et qui fourni les fonctions pour l'exploration des data par une PCA, et qui permet à l'utilisateur de générer des figures prêtes pour la publication 
+
+#nombre de PC à retenir :
+#prepare the ASV table to add taxonomy
+tax_CLR <-  as.data.frame(tax_table(physeq_clr)) # get taxnomic table
+#concatene ASV with Family & Genus names
+ASVname <- paste(rownames(tax_CLR), tax_CLR$Family, tax_CLR$Genus,sep="_")
+#apply 
+rownames(physeq_clr_asv) <- ASVname
+p <- PCAtools::pca(physeq_clr_asv,
+                   metadata = data.frame(sample_data(physeq_clr)))
+PCAtools::screeplot(p, axisLabSize = 18, titleLabSize = 22)
+```
+
+```{r}
 
 ```
 
