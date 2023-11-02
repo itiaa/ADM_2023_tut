@@ -567,7 +567,7 @@ ComplexHeatmap::Heatmap(
 
 # on peut observer (un jour j'espère j'aimerai que ça fonctionne) que les communautés microbiennes dans les échantillons du sud diffèrent de celles du nord. L'effet significatif du traitement doit être testé statistiquement. la diff entre la composition des commu est due à l'abondance differentielle apparente de pleins des top ASV du dataset. L'identification des biomarqueurs significatifs des échantillons du nord et du sud seront recouverts(???) plus tard
 ```
-#6 : indirect gradient analysis
+#partie 6 : indirect gradient analysis
 ```{r}
 #pendant que l'analyse des cluster cherche pour une discontinuité dans le dataset, l'ordination extrait la plus obvious tendance en forme d'axes continus.
 #c'est bien adapté d'analyser les data depuis des communautés écologiques naturelles qui sont généralement structurées en gradient
