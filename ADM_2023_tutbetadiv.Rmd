@@ -572,5 +572,6 @@ ComplexHeatmap::Heatmap(
 #pendant que l'analyse des cluster cherche pour une discontinuité dans le dataset, l'ordination extrait la plus obvious tendance en forme d'axes continus.
 #c'est bien adapté d'analyser les data depuis des communautés écologiques naturelles qui sont généralement structurées en gradient
 #c'est pourquoi
+
 ```
 
