@@ -586,6 +586,423 @@ PCAtools::screeplot(p, axisLabSize = 18, titleLabSize = 22)
 ```
 
 ```{r}
+#on voit que chaque PC ressortent avec 31% de variance expliquée et après on a une diminution graduelle pour les composants qui restent. Un diagramme d'éboulis(??) tout seul montre juste la proportion cumulée d'une variation expliquée, mais on veut déterminer le nombre optimum de PC à retenir.
+
+#Horn’s parallel analysis (Horn 1965) (Buja and Eyuboglu 1992)
+horn <- PCAtools::parallelPCA(physeq_clr_asv)
+horn$n
+```
+
+```{r}
+#elbow method
+elbow <- PCAtools::findElbowPoint(p$variance)
+elbow
+
+#les deux méthodes indiques qu'on doit retenir les 2 ou 3 premières PC. La raison de cette divergence c'est parce que trouver le nombre correct de PC c'est difficile et ça demande de trouver le bon nombre de clusters dans le dataset - y'a pas de bonne rep. la plupart des études prennent en compte que les deux premières PC
+```
+
+```{r}
+# mettre en plot l'ordination :
+PCAtools::biplot(
+  p,
+  lab = p$metadata$SampName,
+  colby = "Geo",
+  pointSize = 5,
+  hline = 0, vline = 0,
+  legendPosition = "right"
+)
+# chaque point est un échantillon, et les échantillons qui apparaissent proches sont plus probables d'être similaires que ceux qui sont loins (bienvu sherlock) -> en colorant les points par un traitement on peut voir que les microbes du nord est plus souvent, mais pas toujours, vachement différent des échantillons du sud
+```
+
+```{r}
+#déterminer les variables qui dirigent la variation dans chaque PC
+# un des bénéfices à ne pas utiliser une matrice de distance, on peut faire un plot des "taxa loadings" sur nos axes PCA. PCAtools permet de ploter le nombre de vecteurs loading taxa avec lesquels on veut commencer qui ont le plus gros poids sur chaque PC. la taille relative de chaque vecteur loading idique sa contribution sur chaque axe de PCA montré, et permet d'estimer à peu près chaque echantillon qui contient plus que ce dit taxon
+
+PCAtools::biplot(
+  p, 
+  # loadings parameters
+  showLoadings = TRUE,
+  lengthLoadingsArrowsFactor = 1.5,
+  sizeLoadingsNames = 3,
+  colLoadingsNames = 'red4',
+  ntopLoadings = 3,
+  # other parameters
+  lab = p$metadata$X.SampleID,
+  colby = "Geo",
+  hline = 0, vline = 0,
+  legendPosition = "right"
+)
+
+#ASV 7,11,12 ont une grosse contribution à PC1 tandis qui ASV 38, 40 et 47 ont une grosse contribution à PC2, ces ASV appartiennt à 2 familles. Les échantillons du sud contiennent une plus grande abondance de ASV11 et 12. Les deux échantillons aberrants du nord en haut du plot sont caractérises par une plus haute abondance de ASV38,40 et 47
+```
+
+```{r}
+#correler le principal composant à nos data envtale
+
+PCAtools::eigencorplot(
+  p,
+  components = PCAtools::getComponents(p, 1:horn$n),
+  metavars = c('SiOH4','NO2','NO3','NH4','PO4',
+              'NT','PT','Chla',"T", "S", "Sigma_t"),
+  col = c('white', 'cornsilk1', 'gold',
+          'forestgreen', 'darkgreen'),
+  cexCorval = 1.2,
+  fontCorval = 2,
+  posLab = "all",
+  rotLabX = 45,
+  scale = TRUE,
+  main = bquote(PC ~ Spearman ~ r^2 ~ environmental ~ correlates),
+  plotRsquared = TRUE,
+  corFUN = "spearman",
+  corUSE = "pairwise.complete.obs",
+  corMultipleTestCorrection = 'BH',
+  signifSymbols = c("****", "***", "**", "*", ""),
+  signifCutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1)
+)
+
+#la seule correlation significative trouvé entre PC1 expliqué par la séparation entre les échantillons du nord et du sud et la salinité. C'est interessant mais la correlation entre deux variables ne veut pas tout de suite dire que le changement dans une variable est la cause de changements dans l'autre. On verra plus tard si c'est une relation de cause à effet entre la salinité et la difference entre les deux lieux échantillonés.
+
+
+```
+
+#partie 6.2 : PCoA : principal component analysis
+```{r}
+#PCoA veut representer la distance entre les échantillons dans un espace euclidien avec peu de dimension, en particulier, ça maximise la correlation linéaire entre les ditances dans une matrice de distance, et les distances dans un espace avec peu de dimensions(tipiquement 2 ou 3 axes sont sélectionnés). Comme toujours le choix de mesure de (dis)similarité est critique et doit coller au data en question. Ici on utilise la distance de Bray-curtis. Quand la distance métrique est euclidienne, PCoA est équivalente à la PCA -> l'interpretation des résultats est la meme. 
+
+#BPCoA on Bray-Curtis dissimilarity
+pcoa_asv <- ape::pcoa(physeq_rar_bray)
+pcoa_coord <- pcoa_asv$vectors[, 1:2]
+
+#Data frame for hull
+hull <- data.frame("Axis.1" = pcoa_coord[, 1],
+                   "Axis.2" = pcoa_coord[, 2],
+                   "sample" = as.data.frame(sample_data(physeq_rar@sam_data)))
+
+
+# North <- hull[hull$sample.Geo  == "North", ][chull(hull[hull$sample.Geo ==  "North", c("Axis.1", "Axis.2")]), ]  # hull values for North
+# South <- hull[hull$sample.Geo == "South", ][chull(hull[hull$sample.Geo == 
+#                                                          "South", c("Axis.1", "Axis.2")]), ]  # hull values for Jellyfishes  
+
+# hull_data <- rbind(North, South)
+
+#Vector of color for hulls
+# color <- rep("#a65628", length(hull_data$sample.Geo))
+# color[hull_data$sample.Geo == "North"] <- "#1919ff"
+# hull_data <- cbind(hull_data, color)
+
+hull_col <- c("#a65628","#1919ff")
+names(hull_col) <- c("North","South")
+
+hull_data <- hull %>%
+  dplyr::group_by(sample.Geo) %>%
+  dplyr::slice(chull(Axis.1,Axis.2)) %>%
+  dplyr::mutate(color = hull_col[sample.Geo])
+
+head(hull_data)
+```
+
+```{r}
+ggplot(data = hull, aes(x = Axis.1, y = Axis.2)) +
+  geom_hline(yintercept = 0, colour = "lightgrey", linetype = 2) +
+  geom_vline(xintercept = 0, colour = "lightgrey", linetype = 2) +
+  geom_polygon(data = hull_data,
+               aes(group = sample.Geo,
+                   fill = sample.Geo),
+               alpha = 0.3) + # add the convex hulls)
+  scale_fill_manual(values = c("Darkgrey", "#1919ff")) +
+  geom_point(data = hull,
+             aes(color = sample.Geo,
+                 size = sample.S),
+             alpha = 0.7) +
+  scale_color_manual(values = c("Darkgrey", "#1919ff")) +
+  xlab(paste("PCo1 (", round(pcoa_asv$values$Relative_eig[1]*100, 1), "%)")) +
+  ylab(paste("PCo2 (", round(pcoa_asv$values$Relative_eig[2]*100, 1), "%)")) +
+  theme_bw() +
+  coord_equal() +
+  theme(axis.title.x = element_text(size = 14), # remove x-axis labels
+        axis.title.y = element_text(size = 14), # remove y-axis labels
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+
+#l'odination des échantillons dans PCoA est très similaire de celle observée dans PCA avec une ségrégation claire entre le nord et le sud. Cela vient de la salinité qui augmente du nord au sud mais ça doit encore etre testé
+
+#y'a pas d'espèces dans cette ordination, c'est parce qu'on a utilisé une matrice de dissimilarité pour que la fonction PCoA se fasse -> donc on peut pas calculer de score de spéciation. par contre on peut travailler sur ce problème avec la fonction biplot.pcoa() du package ape
+
+#PCoA souffre d'un nombre de défauts, surtout sur l'effet d'arc. ces défauts viennent du fait que PCoA maximise la correlation linéaire. Le NMDS rectifie ça par maximiser la correlation de l'ordre de classement.
+```
+
+#partie 6.3 : NMDS : non metric multidimensional scaling
+```{r}
+#ça veut représenter la dissimilarité par paire entre les objets dans un espace à peu de dimensions. chaque coeficient de dissimilarité ou mesure de ditance peut etre utilisé pour constuire une matrice de distance comme entrée. C'est une approche basée sur le classement.Cela veut dire que la data de distance originelle est substituée par des classements. Pendant que l'info sur la magnitude des distances est perdue, les méthodes basées sur le classement est généralement plus robuste sur les data qui n'ont pas de distribution identifiable.
+
+# NMDS est un algo iteratif, il commence par un placement aléatoire des objets dans un espace d'ordination. L'algo commence par affiner ce placement par un process iteratif, pour essayer de trouver une ordination qui ordonne la distance des objets aussi proche que possible de leur vrai distance de dissimilarité (vue dans l'originale matrice de distance). La valeur de stress montre à quel point l'ordination résume la distance observée entre les échantillons.
+#ce n'est pas une analyse propre, ça a trois conséquences :
+#il n'y a pas de résultat d'ordination unique
+#les axes d'ordination ne sont pas ordonés à la variance qu'ils expliquent
+# le nbr de dimensions de l'espace à peu de dimension doit être spécifié avant de faire l'analyse
+# les axes ne sont pas ordonés avec le NMDS, vegan::metaMDS() rotationne automatiquement le résultat final en utilisant PCA pour faire correspondre l'axe 1 à la plus grande variance des points d'échantillons du NMDS
+
+#NMDS plot on Aitchison distance
+physeq_clr_nmds <- vegan::metaMDS(physeq_clr_dist, k=2, trymax=100) #Aitchison distance
+
+```
+
+```{r}
+#Un moyen utile d’évaluer la pertinence d’un résultat NMDS est de comparer dans un shepard diagram les distances entre les objets dans un plot d'orination avec les distances originelles
+vegan::stressplot(physeq_clr_nmds)
+```
+
+```{r}
+# il existe un bon ajustement non métrique entre les dissimilarités observées (dans notre matrice de distance) et les distances dans l'espace d'ordination. Aussi le stress de notre résultat final est bon.
+
+#la valeur stress peut être utilisée comme un indicateur de bon ajustement. Quand la valeur de stress est >0.2 c'est que c'est pauvre et souvent non interprétable, alors que les valeurs <0.1 sont bonnes et les <0.05 sont excellentes, ce qui laisse un mini danger de mauvais interpretation
+#on peut plot le résultat :
+nmds_coord <- data.frame(physeq_clr_nmds$points)
+
+#Data frame for hull
+hull <- data.frame("Axis.1" = nmds_coord[,1],
+                   "Axis.2" = nmds_coord[,2],
+                   "sample" = as.data.frame(sample_data(physeq_clr@sam_data)))
+
+# North <- hull[hull$sample.Geo  == "North", ][chull(hull[hull$sample.Geo == 
+#                                                                 "North", c("Axis.1", "Axis.2")]), ]  # hull values for North
+# South <- hull[hull$sample.Geo == "South", ][chull(hull[hull$sample.Geo == 
+#                                                                "South", c("Axis.1", "Axis.2")]), ]  # hull values for Jellyfishes  
+
+# hull_data <- rbind(North, South)
+
+# #Vector of color for hulls
+# color <- rep("#a65628", length(hull_data$sample.Geo))
+# color[hull_data$sample.Geo == "North"] <- "#1919ff"
+# hull_data <- cbind(hull_data, color)
+
+hull_col <- c("#a65628","#1919ff")
+names(hull_col) <- c("North","South")
+
+hull_data <- hull %>%
+  dplyr::group_by(sample.Geo) %>%
+  dplyr::slice(chull(Axis.1,Axis.2)) %>%
+  dplyr::mutate(color = hull_col[sample.Geo])
+
+#pdf(file="NMDS_Aitchison.pdf", wi = 7, he = 7)
+ggplot(hull,aes(x = Axis.1, y = Axis.2)) +
+  geom_hline(yintercept = 0, colour = "lightgrey", linetype = 2) + 
+  geom_vline(xintercept = 0, colour = "lightgrey", linetype = 2) +
+  geom_polygon(data = hull_data,
+               aes(group = sample.Geo,
+                   fill = sample.Geo),
+               alpha = 0.3) + # add the convex hulls)
+  scale_fill_manual(values = c("Darkgrey", "#1919ff")) +
+  geom_point(data = hull,
+             aes(color = sample.Geo,
+                 size = sample.S),
+             alpha = 0.7) +
+  scale_color_manual(values = c("Darkgrey", "#1919ff")) +
+  geom_text(data = hull_data,
+            x = -0, y = -9,
+            label = paste("Stress =", round(physeq_clr_nmds$stress, 2)),
+            colour = "Black",
+            size = 5)  +
+  xlab(paste("MDS1")) +
+  ylab(paste("MDS2")) +
+  theme_bw() +
+  coord_equal() +
+  theme(axis.title.x = element_text(size=14), # remove x-axis labels
+        axis.title.y = element_text(size=14), # remove y-axis labels
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+
+#on observe le même pattern d'ordination des échantillons comme avec PCA et PCoA. Il n'y a pas de score d'espèce (le même problème avec PCoA) on peut régler ce problème en utilisant la fonction wascores qui donne metaMDS la matrice de commu originelle comme entrée et qui spécifie une mesure de distance
+```
+
+```{r}
+#quelles variable envtale drive les differences observées dans la compo des sp ? comme on a fait avec PCA, on peut correler les variables envtales avec nos axes d'ordination
+
+# Correlation with environmental data
+data.frame(names(hull))
+```
+
+```{r}
+env <- hull[, 13:23]
+
+# The function envfit will add the environmental variables as vectors to the ordination plot
+ef <- vegan::envfit(physeq_clr_nmds, env, permu = 1000)
+ef
+```
+
+```{r}
+# The two last columns are of interest: the squared correlation coefficient and the associated p-value
+# Plot the vectors of the significant correlations and interpret the plot
+plot(physeq_clr_nmds, type = "t", display = "sites")
+plot(ef, p.max = 0.05)
+
+#ici on peut voir que la salinité est très correlée avec le premier axe qui sépare les échantillons du nord et du sud
+#dans une moindre mesure, les nouvelles variables envtale related avec les conditions trophiques des habitats (NH4 et PT) sont correlés avec le deuxième axe de NMDS. La détection de ces nouvelles relations entre les commu microbiennes et l'envt peut etre related au fait que NMDS est le mieux adapté pour détecter la réponse non linéaire des microbes aux gradients envtaux.
+
+#plusieurs types diff d'analyse de gradient peuvent se faire -> graphe 
+```
+
+#partie 7 : analyses pour tester nos hypothèses
+```{r}
+#on va tester si les cluster d'échantillons se regroupent au delà de ce qui est attendu en utilisant des méthodes de test d'hypo comme PERMANOVA (multivariate analysis of variane with permutation) et l'analyse des groupes de similarité (ANOSIM) multiresponse permutation procedures (MRPP) et le test de Mantel (MANTEL) et plus récemment Dirichlet-multinomial models.
+
+```
+
+```{r}
+# PERMANOVA : permet d'appliquer ANOVA à un dataset écologique multivarié. C'est le plus utilisé comme méthode non-paramétrique pour fiter les modèles multivariés à une data de microbes. C'est une analyse multivariée de variance basé sur les matrices de distances et la permutation. Ca se fait en utilisant le concept de centroides. plusieurs permutations de la data (random shuffling) est utilisé pour générer une distribution nulle. On va pouvoir évaluer si la groupe du nord ou du sud à un effet significatif sur la compo globale de la commu bactérienne.
+
+#PERMANOVA
+metadata <- data.frame(sample_data(physeq_clr))
+results_permanova <- vegan::adonis2(physeq_clr_dist ~ Geo,
+                                    data = metadata,
+                                    perm = 1000)
+
+results_permanova
+
+#on voit que les regroupements nord et sud expliquent significativement (p<0.001) 20% de la variance dans la matrice ASV Aitchison. du coup, les deux groupes diffèrent significativement dans leur compo bac. 
+```
+
+```{r}
+#Le test d'ADONIS peut être perturbé par des diff de dispersion (ou de propagation), nous voulons donc vérifier ça.
+
+# Testing the assumption of similar multivariate spread among the groups (ie. analogous to variance homogeneity)
+anova(vegan::betadisper(physeq_clr_dist, metadata$Geo))
+
+# ici les groupes ont des diff de dispersion significatives et le résultat de la permanova peut être impacté par ça, bien que permanova est très robuste pour différencier les dispersion des groupes
+```
+
+```{r}
+#onpeut regarder quel taxa contribue le plus à la diff de commu en utilisant l'ancienne fonction adonis() et la table des ASV des comptes transformés CLR. 
+
+#Show coefficients for the top taxa separating the groups
+
+permanova <- vegan::adonis(t(physeq_clr_asv) ~ Geo,
+                            data = metadata,
+                            permutations = 1000,
+                            method = "euclidean")
+
+coef <- coefficients(permanova)["Geo1",]
+
+top.coef <- coef[rev(order(abs(coef)))[1:10]]
+
+par(mar = c(3, 14, 2, 1))
+
+barplot(sort(top.coef),
+        horiz = TRUE,
+        las = 1,
+        main = "Top taxa",
+        cex.names = 0.7)
+
+```
+
+
+```{r}
+#adonis() et adonis2() nous permet d'explorer les effets des catégories ou des variables continues
+
+# une diff importante entre ces deux fonctions : les termes avec adonis sont testés séquentiellement et c'est la seule option. Cela veut dire que l'ordre dans lequel on entre nos variables est important (si le design est non balancés). Le prochain est ajouté pour voir si ça explique de manière significative plus de variation non expliquées par les variables d'avant. c'est l'équivalent d'utiliser by="terms" dans adonis2(). Si tu ne veux pas que l'ordre compte on peut utiliser adonis2 avec by="margin", ou alors si on veut voir si le modèle en entier est signif on peut utiliser by=NULL. L'ordre on s'en fiche quand by="margin" parce que la signification est testé contre un modèle qui inclue toutes les autres variables pas juste celles qui précèdent dans la formule.
+
+#Permanova on continuous variables
+permanova_S <- vegan::adonis2(physeq_clr_dist ~ S,
+                              data = metadata,
+                              perm = 1000)
+permanova_S
+```
+
+```{r}
+permanova_NH4 <- vegan::adonis2(physeq_clr_dist ~ NH4,
+                                data = metadata,
+                                perm = 1000)
+permanova_NH4
+```
+
+```{r}
+permanova_PT <- vegan::adonis2(physeq_clr_dist ~ PT,
+                               data = metadata,
+                               perm = 1000)
+permanova_PT
+```
+
+```{r}
+#le résultat confirme que la salinité et à moindre mesure le NH4 et le PT sont d'importants facteurs qui caractérisent les commu microbiennes mais qu'en est-il des autres variables ? on va construire un modèle avec toutes les co-variables
+
+#Inspecting co-variables
+permanova_all <- vegan::adonis2(physeq_clr_dist ~ SiOH4 + NO2 + NO3 + NH4 + PO4 + NT + PT + Chla + T + S + Sigma_t,
+                                by="margin",
+                                data=metadata,
+                                perm=1000)
+
+permanova_all
+
+#pourquoi aucune des variables n'a plus d'effets signifs mtn ?
+#on a du mal à ne pas construire un modèle pour prendre tout en compte. Bcp de temps et d'argent sont dépensés là dedans. on espère aussi identifié toutes les variables signifs pour encore mieux caractériser les relations avec une pertinence biologique. Une correlation excessive entre les variables explicatives peut compliquer ou prévenir l'identification d'un set optimal de variables explicatives pour un modèle stat.
+```
+
+
+```{r}
+#on regarde quelles varaibles explicatives sont correlées :
+
+# inpecting autocorrélation
+# compute the correlation matrix
+cor_metadadata <- cor(metadata[, 11:21], method = "spearman")
+
+cor_mtest <- function(mat, ...) {
+  mat <- as.matrix(mat)
+  n <- ncol(mat)
+  p_mat <- matrix(NA, n, n)
+  diag(p_mat) <- 0
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      tmp <- cor.test(mat[, i], mat[, j], method = "spearman", ...)
+      p_mat[i, j] <- p_mat[j, i] <- tmp$p.value
+    }
+  }
+  colnames(p_mat) <- rownames(p_mat) <- colnames(mat)
+  p_mat
+}
+
+# matrix of the p-value of the correlation
+p_mat <- cor_mtest(metadata[, 11:21])
+
+# Leave blank on no significant coefficient
+corrplot::corrplot(cor_metadadata,
+                   type = "upper",
+                   order = "hclust",
+                   p.mat = p_mat,
+                   sig.level = 0.05,
+                   insig = "blank")
+
+#on peut voir que bcp sont correlées
+```
+
+```{r}
+# on enlève certaines, et no garde S pour PO4, sigma-t, NH4 et NO2. NO3 pour SiOH4. Chla pour PT
+
+permanova_cor_pars <- vegan::adonis2(physeq_clr_dist ~ S + NO3 + NT + Chla + T,
+                                     by = "margin",
+                                     data = metadata,
+                                     perm = 1000)
+permanova_cor_pars
+
+#là c'est mieux que le premier test de permanova. On peut voir que la salinité est très significativement related à la variable de réponse, mais on peut voir que le modèle qu'avec la salinité est encore mieux. En gros : les vraies relations entre les variables peuvent etre masked si les variables explicatives sont colinéaires. Cela pose problème dans la création de modèlé qui ammène à des complications dans l'interference de modèle. Prendre le temps d'évaluer la colinéarité c'est le début pour créer des modèles écologiques plus robustes 
+```
+
+#partie 7.2 : analysis of similarité (ANOSIM)
+```{r}
+# pour les diff signif entre deux ou plus classes d'objets basé sur n'importe quelle mesure de (dis)similarité. Cela compare les rangs des distances entre les objets des diff classes avec les ranges des distances des objets dans les classes. C'est un peu la meme base que l'ordination NMDS
+
+#ANOSIM
+vegan::anosim(physeq_clr_dist, metadata$Geo, permutations = 1000)
+
+#comme permanova le résultat indique un effet signif de la provenance de l'échantillon sur les commu bac
+# une approche plus formelle pour tester des hypothèse peut etre faite par une analyse redondante ou une analyse de correspondance canoniques qui utilise directement l'information sur les champs de metadata en même temps que ça genère les ordinations et les test. Ces approches test directement les hypo à propos des variables envtales
+```
+
+#partie 8 : Direct gradient analysis
+```{r}
 
 ```
 
