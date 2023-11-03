@@ -1052,6 +1052,27 @@ anova(spe_rda, by = "axis", step = 1000)
 ```
 
 ```{r}
+#sélectionner les variables
+# ça arrive parfois qu'on veut réduire le nombre de variables explicatives. les raisons dépendent.
+#une approche simple pour identifier une colinéarité dans les variables explicatives c'est d'utiliser le VIF (facteur d'inflation de variance). Les calculs de VIF sont facils à comprendre, plus la valeur est haute plus la colinéarité est haute. VIF mesure la proportion par lesquelles la variance d'un coeff de regression est influencé dans la présence d'autres variables explicatives. VIF plus haut que 20 indique une forte collinéarité. Au dessus de 10 on doit réexaminer, et mis de côté si possible.
+
+# Variance inflation factors (VIF)
+vegan::vif.cca(spe_rda)
+```
+
+```{r}
+#salinité T° et sigma.t ont une très haute VF qui confirme les colinéarités observés avant entre les variables explicatives (permanova). Une réduction du nombre de variables explicatives est justifiée. Pour simplifier ce modèle, on peut faire une sélection "forward", ou "backwards" ou "stepwise". Ces types de sélection nous aide à selectionner des variables qui sont statistiquement importante. Cependant, c'est important de noter que selectionner des variables écologiques est plus important que performer une sélection dans ce sens. Si une variable d'interet écologique n'est pas sélectionnée, ça ne va pas dire qu'on l'enleve de RDA. Ici, on va faire une sélection "forward" sur nos 11 variables envtales. On peut utiliser la fonction ordiR2step()  :
+
+# Forward selection of explanatory variables using vegan's ordiR2step()
+step_forward <- vegan::ordiR2step(vegan::rda(t(physeq_clr_asv) ~ 1,
+                                             data = metadata[, 11:21]),
+                                  scope = formula(spe_rda),
+                                  direction = "forward",
+                                  pstep = 1000)
+
+```
+
+```{r}
 
 ```
 
