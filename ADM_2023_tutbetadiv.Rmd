@@ -1003,6 +1003,55 @@ vegan::anosim(physeq_clr_dist, metadata$Geo, permutations = 1000)
 
 #partie 8 : Direct gradient analysis
 ```{r}
+#Les ordinations simples analysent qu'une seule data et revèle la strcuture majeur dans un graphique construit depuis un set réduit d'axes orthogonaux. C'est une forme passive d'analyse, et l'utilisateur interprete le résultat de l'ordination à posteriori. Au contraire, les analyses directe de gradient (aussi appelées ordination canonique) associent deux ou plus set de data dans le processus d'ordination lui-même. En conséquence, si l'un veut extraire les structures du set de data et sont related aux structures dans un autre jeu de données, et / ou veulent tester stastistiquement des hypothèses à propos de la signification des relations, l'odination canonique peut etre bien. on va faire un RDA sur note jeu de données, mais pleins d'autres existent.
+```
+
+#partie 8.1 : RDA : redundant analysis
+```{r}
+#c'est une méthode qui combine la regression et la PCA. ça compute les axes qui sont des combinations linéaires des variables explicatives. Dans RDA, un seul peut vraiment dire que les axes expliquent ou modèlisent la variation de matrice de dépendance.
+
+# RDA of the Aitchinson distance
+# constrained by all the environmental variables
+# contained in metadata
+#
+# Observe the shortcut formula
+spe_rda <- vegan::rda(t(physeq_clr_asv) ~ .,
+                      metadata[, 11:21])
+head(summary(spe_rda))  # Scaling 2 (default)
+```
+
+```{r}
+#les variables envtales inclues expliquent 70,44% de la variation sur la compo de la commu bacterienne dans tous les sites. 29,56% de la variation est inexpliquée. CEpendant, on verra que la proportion de variation expliquée est bien plus basse. Le R2 du résumé le mesure la forme des relations canoniques entre les variables de reponses (Y matrice) et les variables explicatives (X matrice) par calculer la proportion de variable de Y expliqué par la variable de X. Cependant cet R2 est biased. On calcule une R2 ajusté, ce qui mesure aussi la force des relations entre X et Y, mais qui appliques une correlation de R2 pour prendre en compte le nombre de variable expliquées. C'est la stat qu'on doit reportée.
+
+# Unadjusted R^2 retrieved from the rda object
+R2 <- vegan::RsquareAdj(spe_rda)$r.squared
+R2
+
+# Adjusted R^2 retrieved from the rda object
+R2adj <- vegan::RsquareAdj(spe_rda)$adj.r.squared
+R2adj
+```
+
+```{r}
+#en réalité, la proportion de variance expliquée descend à 16.25%. La sortie numérique montre que les deux premiers axes canoniques expliquent ensemble 35.1% de la bariance total de la data, le premier axe explique 25.9%. mais ce sont des valeurs non ajustées. R2 ajusté = 16.2%, le % de valeurs propres adj contraintes accumulées montre que le premier axe explique 0.162 * 0.368 = 0.059 soit 5.9% de la variance. Parce que la data écologique sont généralement avec du bruit, on ne devrait jamais avoir une valeur haute de R2. De plus, la premiere valeur propre sans contrainte PC1, le premier axe sans contrainte pour les résidus, est comparativement haut, ce qui veut dire que ça affiche une structure de résidus importante de data de réponse qui n'est pas expliqué par les mesures de paramètres envtaux.
+```
+
+```{r}
+#l'interpretation de l'ordination avec contraintes doit etre précédé par un test de signification stat. Comme une régression multiple, un résultat non signif ne doit pas etre interprété et doit etre dégagé.
+
+# Global test of the RDA result
+anova(spe_rda, step = 1000)
+```
+
+```{r}
+# Tests of all canonical axes
+anova(spe_rda, by = "axis", step = 1000)
+
+#ici on peut voir que tout notre modèle stat n'est pas signif (p=0.08) et que chaque axe canonique préovenant de RDA ne l'est pas non plus (p>0.05). donc on ne peut pas intepréter ce RDA model.
+#est-ce qu'on peut dire pourquoi ?
+```
+
+```{r}
 
 ```
 
