@@ -1170,8 +1170,6 @@ ggplot() +
 
 #Tout d'abord, nous calculons la matrice de distance spatiale. Pour calculer la distance kilométrique entre les points d'échantillonnage à partir des coordonnées géographiques : le package SpatialEpi et la fonction latlong2grid(). 
 
-install.packages("SpatialEpi")
-library(SpatialEpi)
 ```
 
 #soucis de dimension partout ensuite je comprends pas
@@ -1179,7 +1177,6 @@ library(SpatialEpi)
 ```{r}
 ANF_km <- readRDS(here::here("course-material-main","data","beta_diversity","spatial_distance.rds"))
 ANF_km_dist <- dist(ANF_km)
-
 ```
 
 ```{r}
