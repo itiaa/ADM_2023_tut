@@ -1070,7 +1070,98 @@ step_forward <- vegan::ordiR2step(vegan::rda(t(physeq_clr_asv) ~ 1,
                                   direction = "forward",
                                   pstep = 1000)
 
+#ici on peut ajouter une variable à la fois, et la retenir si ça augmente significativement le modèle ajusté de R2. La sélection qui suit nous montre qu'un modèle qu'avec la salinité a un plus haut R2 ajusté qu'un avec toutes les variables et qui explique 18.4% de la variance. 
 ```
+
+```{r}
+#on va calculer la RDA la plus partimonieuse et regardé si c'est signif :
+
+# Parsimonious RDA
+spe_rda_pars <- vegan::rda(t(physeq_clr_asv) ~ S, data = metadata[, 11:21])
+anova(spe_rda_pars, step = 1000)
+```
+
+```{r}
+anova(spe_rda_pars, step = 1000, by = "axis")
+```
+
+```{r}
+R2adj_pars <- vegan::RsquareAdj(spe_rda_pars)$adj.r.squared
+
+# Compare variance inflation factors
+vegan::vif.cca(spe_rda)
+```
+
+```{r}
+vegan::vif.cca(spe_rda_pars)
+```
+
+```{r}
+#maintenant, chacun des deux, le modèle et le premier axe canonique résulte du RDA sont statistiquement signif (p<0.05). La VIF de la salinité n'est que 1. Ce modèle RDA est interpretable ! on va le plot
+
+# Preparation of the data for the plot
+#
+# View analysis results
+ii <- summary(spe_rda_pars)
+
+# Depending on the drawing result
+# the drawing data can be enlarged or
+# reduced to a certain extent, as follows
+sp <- as.data.frame(ii$species[, 1:2]) * 2
+sp_top <- sp[order(abs(sp$RDA1), decreasing = TRUE), ][1:6, ]
+
+st <- as.data.frame(ii$sites[, 1:2])
+st <- merge(st,
+      metadata["Geo"],
+      by = "row.names")
+
+yz <- t(as.data.frame(ii$biplot[, 1:2]))
+row.names(yz) <- "Salinity"
+yz <- as.data.frame(yz)
+
+eigen_values <- format(100 *ii$cont[[1]][2,], digits=4)
+
+#plot
+ggplot() +
+  geom_point(data = st, size = 4,
+             aes(x = RDA1, y = PC1,
+                 shape = Geo, fill = Geo)) +
+  scale_shape_manual(values = c(21:25)) +
+  geom_segment(data = sp_top,
+               arrow = arrow(angle = 22.5,
+                             length = unit(0.35, "cm"),
+                             type = "closed"),
+               linetype = 1, size = 0.6, colour = "red",
+               aes(x = 0, y = 0, xend = RDA1, yend = PC1)) +
+  ggrepel::geom_text_repel(data = sp_top,
+                           aes(x = RDA1, y = PC1, label = row.names(sp_top))) +
+  geom_segment(data = yz,
+               arrow = arrow(angle = 22.5,
+                             length = unit(0.35,"cm"),
+                             type = "closed"),
+               linetype = 1, size = 0.6, colour = "blue",
+               aes(x = 0, y = 0, xend = RDA1, yend = PC1)) +
+  ggrepel::geom_text_repel(data = yz, aes(RDA1, PC1, label=row.names(yz)))+
+  labs(x = paste("RDA 1 (", eigen_values[1], "%)", sep = ""),
+       y = paste("PC 1 (", eigen_values[2], "%)", sep = ""))+
+  geom_hline(yintercept = 0,linetype = 3,size = 1) + 
+  geom_vline(xintercept = 0,linetype = 3,size = 1)+
+  guides(shape = guide_legend(title = NULL,
+         color = "black"),
+         fill = guide_legend(title = NULL))+
+  theme_bw() +
+  theme(panel.grid = element_blank())
+```
+
+```{r}
+#l'un des plus fort aspect de RDA est la visualisation simultanée de la réponse et des variables explicatives (sp et variables envtales). Depuis cette ordination, on peut vraiment dire mtn que la salinité est la principale variable envtale mesurée qui faconne les commu bac. Entre toutes les ASV, certaine sont related à ce gradient de salinité. C'est le cas de ASV 11 et 12, dont l'abondance augmente quand la salinité diminue. ASV 7 qui fait l'inverse. On peut analyser de pleins de façon ces diff de pattern, mais ce qui est vraiment puissant avec RDA c'est qu'on fait ressortir les relations de gradients, pas une diff d'abondance entre deux conditions. Cependant, une grande partie de la variance dans la commu bac continue d'être inexpliquée. Les variances dans les commu d'sp peuvent etre expliquées par un processus deterministique comme le "species sorting" (influence de l'envt comme on le voit ici) mais aussi un processus stochastique comme une disperion qui dépend entre autre de la distance entre les commu. 
+```
+
+```{r}
+#Maintenant qu'on a cette info : regardons un pattern commun dans les commu écologique : distance-decay pattern (modèle de décroissance de la distance)
+```
+
+#partie 8.2 : MRM : multiple regression on dissimilarity matrices
 
 ```{r}
 
