@@ -9,6 +9,7 @@ library(ggplot2)
 library(dplyr)
 devtools::load_all(path="course-material-main")
 ```
+
 ```{r}
 output_beta <- here::here("outputs", "beta_diversity")
 if (!dir.exists(output_beta)) dir.create(output_beta, recursive = TRUE)
@@ -1164,6 +1165,178 @@ ggplot() +
 #partie 8.2 : MRM : multiple regression on dissimilarity matrices
 
 ```{r}
+#La décroissance de la similarité des assemblages avec la distance spatiale peut s'expliquer par des mécanismes alternatifs : la limitation de la dispersion et le tri des espèces. Pour comprendre leurs contributions relatives, nous comparons la décroissance de la similarité bac avec la distance spatiale, ainsi qu'indépendamment avec la distance envtale
+#Une combinaison de la corrélation de Mantel et de la régression multiple sur les matrices de distance permet une analyse de type régression de deux matrices (dis)similaires ou plus, en utilisant des permutations pour déterminer la signification des coefficients de détermination. Une matrice doit contenir les (dis)similarités calculées à partir des données de réponse, telles que les abondances d'OTU, tandis que les autres matrices doivent contenir les (dis)similarités calculées à partir des données explicatives(par exemple, les paramètres environnementaux ou spatiaux).
+
+#Tout d'abord, nous calculons la matrice de distance spatiale. Pour calculer la distance kilométrique entre les points d'échantillonnage à partir des coordonnées géographiques : le package SpatialEpi et la fonction latlong2grid(). 
+
+install.packages("SpatialEpi")
+library(SpatialEpi)
+```
+
+#soucis de dimension partout ensuite je comprends pas
+
+```{r}
+ANF_km <- readRDS(here::here("course-material-main","data","beta_diversity","spatial_distance.rds"))
+ANF_km_dist <- dist(ANF_km)
 
 ```
 
+```{r}
+#Calculate and add model to the plot
+
+ANF_decay_exp <- betapart::decay.model(physeq_clr_dist/100,
+                                       ANF_km_dist,
+                                       y.type="dissim",
+                                       model.type="exp",
+                                       perm=100)
+
+#Plot Distance decay relationships
+plot(ANF_km_dist, physeq_clr_dist/100,
+     ylim=c(0, max(physeq_clr_dist/100)),
+     xlim=c(0, max(ANF_km_dist)),
+     xlab = "Distance (km)", ylab = "Dissimilarity (CLR)")
+
+betapart::plot.decay(ANF_decay_exp, col = "blue",
+                     remove.dots = TRUE, add = TRUE)
+
+legend("bottomright",
+       paste("exp: (Beta =", round(ANF_decay_exp$second.parameter, 4),
+             ", Rsqr =", round(ANF_decay_exp$pseudo.r.squared, 2),
+             ", p =", round(ANF_decay_exp$p.value, 2)),
+       fill = "blue")
+```
+
+```{r}
+#Variance partitioning
+#Microbiam matrix (response)
+physeq_clr_dist_square <- phyloseq::distance(physeq_clr,
+                                             method = "euclidean",
+                                             diag = TRUE,
+                                             upper = TRUE)
+
+#Spatial matrix (explicative)
+ANF_km_dist_square <- dist(ANF_km, diag = TRUE, upper = TRUE)
+
+#environmental matrix (explicative)
+envdata <- dist(metadata[,11:21], diag = TRUE, upper = TRUE)
+```
+
+```{r}
+#Multiple regressions on Matrices (MRM) - attention les colonnes et lignes des matrices doivent correspondrent (pas besoin d'avoir les mêmes noms)
+
+ecodist::MRM(physeq_clr_dist_square ~ envdata + ANF_km_dist_square, nperm=1000) # 0.366
+```
+
+```{r}
+ecodist::MRM(physeq_clr_dist_square ~ envdata, nperm=1000) # 0.212
+```
+
+```{r}
+ecodist::MRM(physeq_clr_dist_square ~ ANF_km_dist_square, nperm=1000) # 0.238
+```
+
+```{r}
+modEvA::varPart(A = 0.212, B = 0.238, AB = 0.366,
+                A.name = "Environmental",
+                B.name = "Dispersal limitation")
+```
+
+```{r}
+#En utilisant la régression multiple sur les matrices de distance (MRM), les variables spatiales et environnementales se sont avérées être des prédicteurs significatifs de la diversité bêta et ont ensemble expliqué 36,7 % de la variation dans la dissimilarité des communautés microbiennes. Ensuite, nous avons utilisé la partition de la variance pour répartir la variation en composantes purement spatiales, purement environnementales et environnementales structurées spatialement. Avec 15,4 %, la quantité de variation dans la dissimilarité expliquée par la composante purement spatiale était plus élevée que la variation expliquée par la composante environnementale, ce qui indique que la dispersion est un processus important façonnant nos communautés.
+
+#De manière similaire aux analyses de gradient indirect, de nombreux types d'analyses de gradient direct sont disponibles. Dans le graphique suivant, nous proposons des suggestions de choix appropriés en fonction de la structure des données en entrée et des relations attendues entre les variables.
+
+
+```
+
+#partie 9 : DAA : differential abundance analysis
+
+```{r}
+#L'objectif des tests de différence d'abondance (DAA) est d'identifier des taxons spécifiques associés à des variables de métadonnées d'intérêt. Il s'agit d'une tâche difficile et l'une des zones les plus controversées de l'analyse des données microbiomiques, comme illustré dans cette prépublication. Cela est lié à des préoccupations selon lesquelles les approches de normalisation et de test ont généralement échoué à contrôler les taux de découvertes fausses.
+
+#Il existe de nombreux outils pour effectuer des DAA. Les outils les plus populaires, sans entrer dans l'évaluation de leur performance pour cette tâche, sont : (ALDEx2, ANCOM-BC, conrcob, DESeq2, edgeR, LEFse, limma voom, LinDA,MaAsLin2, metagenomeSeq, IndVal,t-test, Test de Wilcoxon)
+
+#des gens ont comparé toutes ces méthodes répertoriées sur 38 ensembles de données différents et ont montré que ALDEx2 et ANCOM-BC produisent les résultats les plus cohérents entre les études. Étant donné que différentes méthodes utilisent différentes approches (paramétriques vs non paramétriques, techniques de normalisation différentes, hypothèses, etc.), les résultats peuvent différer entre les méthodes. Par conséquent, il est fortement recommandé de choisir plusieurs méthodes pour avoir une idée de la robustesse et de la reproductibilité potentielle de vos résultats en fonction de la méthode. trois méthodes utilisées en écologie microbienne (ANCOM-BC, ALDEx2 et LEFse), et nous comparerons les résultats entre elles : package microbiome_marker récent.
+```
+
+#partie 9.1 : Linear discriminant analysis Effect Size (LEFse)
+```{r}
+#LEFSE a été dvp par des gens. LEFSE utilise tout d'abord le test non paramétrique de Kruskal-Wallis (KW) à somme de rangs pour détecter les caractéristiques présentant des abondances différentielles significatives par rapport à la classe d'intérêt ; la cohérence biologique est ensuite examinée en utilisant un ensemble de tests par paires entre les sous-classes à l'aide du test de somme de rangs Wilcoxon (non apparié). En dernière étape, LEfSe utilise l'analyse discriminante linéaire (LDA) pour estimer la taille de l'effet de chaque caractéristique présentant une abondance différentielle.
+
+#LEFSE
+mm_lefse <- microbiomeMarker::run_lefse(physeq, norm = "CPM",
+                                        wilcoxon_cutoff = 0.01,
+                                        group = "Geo",
+                                        taxa_rank = "none",
+                                        kw_cutoff = 0.01,
+                                        multigrp_strat = TRUE,
+                                        lda_cutoff = 4)
+
+mm_lefse_table <- data.frame(mm_lefse@marker_table)
+mm_lefse_table
+```
+
+```{r}
+p_LDAsc <- microbiomeMarker::plot_ef_bar(mm_lefse)
+y_labs <- ggplot_build(p_LDAsc)$layout$panel_params[[1]]$y$get_labels()
+p_abd <- microbiomeMarker::plot_abundance(mm_lefse, group = "Geo") +
+  scale_y_discrete(limits = y_labs)
+gridExtra::grid.arrange(p_LDAsc, p_abd, nrow = 1)
+
+#LEFse identifie 12 biomarqueurs, parmi lesquels ASV 7, 11 et 12 que nous avions déjà identifiés précédemment avec d'autres méthodes.
+```
+
+#partie 9.2 : differential analysis of compositions of microbiomes with bias correction (ANCOM-BC)
+#fonctionne pas
+```{r}
+#La méthodologie ANCOM-BC suppose que l'échantillon observé est une fraction inconnue d'un volume unitaire de l'écosystème, et que la fraction d'échantillonnage varie d'un échantillon à l'autre. ANCOM-BC prend en compte la fraction d'échantillonnage en introduisant un terme de correction spécifique à l'échantillon dans un cadre de régression linéaire, qui est estimé à partir des données observées. Le terme de correction sert de correction de biais, et le cadre de régression linéaire en échelle logarithmique est analogue à la transformation en log-ratio pour traiter la composition des données microbiomiques. De plus, cette méthode fournit des valeurs p et des intervalles de confiance pour chaque taxon. Elle contrôle également le taux de découvertes fausses (FDR) et est simple du point de vue de sa mise en œuvre sur le plan computationnel.
+
+#ça marche pas 
+#ancomBC
+
+install.packages("ANCOMBC")
+library(ANCOMBC)
+```
+
+```{r}
+mm_ancombc <- run_ancombc_patched(
+  physeq,
+  group = "Geo",
+  taxa_rank = "none",
+  pvalue_cutoff = 0.001,
+  p_adjust = "fdr"
+)
+
+mm_ancombc_table <- data.frame(mm_ancombc@marker_table)
+mm_ancombc_table
+```
+
+```{r}
+an_ef <- microbiomeMarker::plot_ef_bar(mm_ancombc)
+y_labs <- ggplot_build(an_ef)$layout$panel_params[[1]]$y$get_labels()
+an_abd <- microbiomeMarker::plot_abundance(mm_ancombc, group = "Geo") +
+  scale_y_discrete(limits = y_labs)
+gridExtra::grid.arrange(an_ef, an_abd, nrow = 1)
+
+#AnCOM-BC identifie 10 biomarqueurs et tout en commun avec les résultats de l'analyse LEFse (si ça fonctionnait)
+```
+
+#partie 9.3 : anova-like differential expression (ALDEx2)
+```{r}
+#ALDEx2 estime la variation technique au sein de chaque échantillon par taxon en utilisant la distribution de Dirichlet. De plus, il applique la transformation du logarithme centralisé sur le rapport (ou des transformations de rapports de logarithmes étroitement liées). Selon la configuration expérimentale, il effectuera un test T de Welch à deux échantillons et un test de Wilcoxon, ou une analyse de variance à un facteur et un test de Kruskal-Wallis. La procédure de Benjamini-Hochberg est appliquée dans tous les cas pour corriger les tests multiples.
+
+mm_aldex <- microbiomeMarker::run_aldex(physeq, group = "Geo",
+                                        norm = "CPM",
+                                        taxa_rank = "none",
+                                        p_adjust = "fdr")
+
+mm_aldex_table <- data.frame(mm_aldex@marker_table)
+mm_aldex_table
+```
+
+```{r}
+#ALDEx2 est beaucoup plus strict et identifie uniquement 1 biomarqueur, l'ASV 27, qui a été identifié par les deux autres méthodes d'analyse de l'abondance différentielle (DAA). Les autres ne parviennent pas à atteindre le seuil de contrôle du taux de découvertes fausses (FDR) utilisé ici, bien qu'ils aient probablement des tailles d'effet assez importantes. Souvent, lorsque je considère la réalisation de tests d'abondance différentielle (DA), j'exécute plusieurs modèles et me concentre sur l'intersection des OTUs (Unités Taxonomiques Opérationnelles) données par au moins deux méthodes. Ici, il s'agirait des 10 ASV identifiés avec ANCOM-BC.
+```
+
+#et c'est finiiii, dommage que la fin ne fonctionne pas :(
