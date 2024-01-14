@@ -3,7 +3,13 @@ title: "ADM_2024_plastique"
 output: pdf_document
 date: "2024-01-11"
 ---
-Bonjour Monsieur. Voici mon TD sur mon article. Je n'ai pas pu utiliser ma VM j'ai donc tout fait depuis mon Rstudio en local, ce qui m'a vraiment permis de comprendre le code et les chemins d'accés etc. J'ai utiliser la pipeline de dada 2 classique du coup : https://benjjneb.github.io/dada2/tutorial.html. Cependant, pas mal de codes prenaient enormement de temps à run. Si j'avais eu l'idée de faire en local plus tôt, j'aurai pu, je pense, poursuivre sur phyloseq avec ma table d'ASV (bien que petite) et faire l'alpha et beta diversité. Je sais bien que c'est le plus interessant, je suis moi même un peu triste de ne pas avoir le temps de poursuivre pour voir les figures que j'aurai obtenues... Mais je vais faire tout ça pendant mon stage et je pense que ça va être très formateur.
+Bonjour Monsieur. Voici mon TD sur mon article. 
+Je n'ai pas pu utiliser ma VM j'ai donc tout fait depuis mon Rstudio en local, ce qui m'a vraiment permis de comprendre le code et les chemins d'accés etc. 
+J'ai utiliser la pipeline de dada 2 classique du coup : https://benjjneb.github.io/dada2/tutorial.html. 
+Cependant, pas mal de codes prenaient enormement de temps à run. Si j'avais eu l'idée de faire en local plus tôt, j'aurai pu, je pense, poursuivre 
+sur phyloseq avec ma table d'ASV (bien que petite) et faire l'alpha et beta diversité. Je sais bien que c'est le plus interessant, je suis moi même 
+un peu triste de ne pas avoir le temps de poursuivre pour voir les figures que j'aurai obtenues... Mais je vais faire tout ça pendant mon stage et 
+je pense que ça va être très formateur.
 
 
 La première étape est de charger tous les packages : dada2, ggplot2, BioManager etc
