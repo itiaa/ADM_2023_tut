@@ -1,0 +1,162 @@
+---
+  title: "ADM_2024_plastique"
+output: pdf_document
+date: "2024-01-11"
+---
+#Bonjour Monsieur. Voici mon TD sur mon article. 
+#Je n'ai pas pu utiliser ma VM j'ai donc tout fait depuis mon Rstudio en local,
+#ce qui m'a vraiment permis de comprendre le code et les chemins d'accés etc. 
+#J'ai utiliser la pipeline de dada 2 classique du coup : https://benjjneb.github.io/dada2/tutorial.html. 
+#Cependant, pas mal de codes prenaient enormement de temps à run. 
+#Si j'avais eu l'idée de faire en local plus tôt, j'aurai pu, je pense, 
+#poursuivre sur phyloseq avec ma table d'ASV (bien que petite) et faire l'alpha 
+#et beta diversité. Je sais bien que c'est le plus interessant, je suis moi même un peu 
+#triste de ne pas avoir le temps de poursuivre pour voir les figures que j'aurai obtenues... 
+#Mais je vais faire tout ça pendant mon stage et je pense que ça va être très formateur.
+
+
+#La première étape est de charger tous les packages : dada2, ggplot2, BioManager etc
+library(dada2)
+
+
+#On définit le chemin pour aller aux Fastas zippés.
+
+path_to_fastqs <- "/Users/Anna/OneDrive/Cours/Master/M1/Semestre 8/stage/DADA2/dezippes"
+
+
+#On vérifie qu'on a tout en listant les fichiers.
+
+list.files(path_to_fastqs)
+
+
+#On met dans la variable fnFs les forward et on verifie le chemin d'accés.
+
+fnFs <- sort(list.files(path_to_fastqs,
+                        pattern = "_1.fastq",
+                        full.names = TRUE))
+fnFs
+
+
+#On met dans la variable fnRs les reverse.
+
+fnRs <- sort(list.files(path_to_fastqs,
+                        pattern = "_2.fastq",
+                        full.names = TRUE))
+
+
+#On divise la chaîne de carac selon _
+
+sample.names <- basename(fnFs) |>
+  strsplit(split = "_") |> 
+  sapply(head, 1) # appliquer une fonction à chaque éléments d'une liste
+sample.names
+
+
+#On sépare les noms des fichiers en deux vecteurs.
+
+basename(fnFs) |>
+  strsplit(split = "_") |> 
+  head()
+
+
+#On montre les quality profils. On observe un QS très bon pour les forward, alors que pour les reverse on observe vers 200 nucléotides que le QS passe en dessous de 30 alors on coupera à ce niveau là. (QS 30 = 1 chance sur 1000 d'avoir la mauvaise base nucléotidique)
+
+plotQualityProfile(fnFs)
+plotQualityProfile(fnRs)
+
+
+
+
+filtFs <- file.path(path_to_fastqs, "filtered", paste0(sample.names, "_1_filt.fastq"))
+filtRs <- file.path(path_to_fastqs, "filtered", paste0(sample.names, "_2_filt.fastq"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+
+#On coupe la fin des séquences après avoir vu que les séquences étaient d'assez bonne qualité. Les choix de ce qu'on garde sont de 240 pb pour les forward. Les reverses étaient de moins bonnes qualités vers la fin des amplifications alors on ne garde que 200 pb. Il faut faire attention à garder assez de pb pour les aligner ensuite.
+
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, trimLeft = c(20,20), truncLen=c(240,200),
+                     maxN=0, maxEE = c(2,2),truncQ=2, rm.phix=TRUE,
+                     compress=FALSE, multithread=FALSE)
+head(out)
+
+#On fait apprendre le modèle derreurs à partir de nos séquences forward.
+
+errR <- learnErrors(filtRs, multithread = FALSE)
+
+#On montre le graphique.
+
+plotErrors(errR, nominalQ=TRUE)
+
+
+dadaFs <- dada(filtFs, err=errF, multithread=FALSE)
+
+dadaRs <- dada(filtRs, err=errR, multithread=FALSE)
+
+
+dadaFs[[1]]
+
+
+#On merge les séquences qui sont trimées et filtrées.
+
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+
+head(mergers[[1]])
+
+#On crée un tableur avec ces séquences mergées et on donne sa dimensions pour voir combien on en a.
+
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+
+table(nchar(getSequences(seqtab)))
+
+
+#On enlève les chimères du tableur, 
+#cest à dire les séquences quon
+#pense être faussement séquencées et 
+#faussement comptées comme des ASV.
+
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=FALSE, verbose=TRUE)
+dim(seqtab.nochim)
+
+
+
+#On ajoute les noms aux colonnes et aux lignes.
+
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+head(track)
+
+
+#On assigne la taxonomie depuis la base de données Silva 138 qui a été téléchargée en local.
+taxa <- assignTaxonomy(seqtab.nochim, "C:/Users/Anna/OneDrive/Cours/Master/M1/Semestre 8/stage/DADA2/silva_nr99_v138.1_train_set.fa.gz", multithread=FALSE)
+
+
+#On assigne la taxonomie au niveau de lespèce qui ne se fait pas systématiquement et prend énormement de temps. 
+#Jai trouvé lexplication dans une vidéo dexplication de la pipeline de 
+#dada2 mais de 2018 : https://www.youtube.com/watch?v=wV5_z7rR6yw . 
+#Les régions amplifiées du 16S sont les régions hypervariables. 
+#Parfois elles ne sont pas "hyper" hypervariables et donc cela ne permet pas dobtenir une assignation a lespèce.
+
+taxa <- addSpecies(taxa, "C:/Users/Anna/OneDrive/Cours/Master/M1/Semestre 8/stage/DADA2/silva_species_assignment_v138.1.fa.gz")
+
+
+#On lie les noms des lignes qui étaient des chiffres aux noms des ASV trouvées dans le tableau dASV.
+
+#On lexporte.
+export_folder <- ("export")
+
+if (!dir.exists(export_folder)) dir.create(export_folder, recursive = TRUE)
+
+saveRDS(object = seqtab.nochim,
+        file = file.path(export_folder, "seqtab.nochim.rds"))
+
+saveRDS(object = taxa.print,
+        file = file.path(export_folder, "taxa.rds"))
+
+
+#On "l'écrit" en csv pour pouvoir l'utiliser dans phyloseq.
+
+write.csv(taxa.print, "tableASVfinale.csv")
